@@ -3,28 +3,12 @@ import pandas as pd
 import yfinance as yf
 import riskfolio as rp
 import matplotlib.pyplot as plt
-# import warnings # Kept commented as in the original, can be enabled if needed.
 
-# warnings.filterwarnings("ignore")
 pd.options.display.float_format = '{:.4%}'.format
 
-# ==============================================================================
-# 1. CONFIGURACIÓN DEL BACKTEST Y MODELO
-# ==============================================================================
+START_DATE_DOWNLOAD = '2003-01-03' 
+END_DATE_DOWNLOAD = '2021-12-30'   
 
-# Rango de fechas para la descarga de datos
-# Manteniendo las fechas del script original '1a4 HRP copy.py'
-# Si se requiere un inicio específico como '2003-01-03' para los nuevos activos,
-# START_DATE_DOWNLOAD debería ajustarse, considerando el LOOKBACK_DAYS.
-# Para que el backtest comience después del lookback, y si el lookback es 3 años (756 días),
-# y los retornos de '1a3 RP.py' empiezan en '2003-01-03',
-# el backtest podría empezar alrededor de '2006-01-01'.
-# Vamos a alinear con el rango de '1a3 RP.py' para la descarga,
-# y el lookback determinará el inicio efectivo del backtest.
-START_DATE_DOWNLOAD = '2003-01-03' # Alineado con 1a3 RP.py
-END_DATE_DOWNLOAD = '2021-12-30'   # Alineado con 1a3 RP.py
-
-# Tickers de los activos (de 1a3 RP.py)
 ASSETS = [    "XOM","GE","MSFT","C","BAC","WMT","PG","PFE","JNJ","AIG",
             "IBM","CVX","INTC","WFC","T","KO","VZ","PEP","HPQ","HD","AMGN",
             "UPS","COP","QCOM","MRK","UNH","ORCL","ABT","AXP","JPM","MO",
@@ -35,28 +19,20 @@ ASSETS = [    "XOM","GE","MSFT","C","BAC","WMT","PG","PFE","JNJ","AIG",
             "PPG","BSX","MMC","NOC","EOG","DVN","NUE","FCX","USB","NSC",
             "UNP","KEY","BAX","AZO","GPC","DHR","BEN","TMO","TROW","BXP",
             "SPG","KMB","SCHW","RF","WMB","PAYX", "D", "GOLD", "TLT"] #
-ASSETS.sort() # Mantener la consistencia de ordenar los activos
 
-# Parámetros de Backtesting
 TRADING_DAYS_PER_YEAR = 252
-LOOKBACK_YEARS = 3 # Ajustado a 1 año como en 1a3 RP.py para el lookback_period
-LOOKBACK_DAYS = LOOKBACK_YEARS * TRADING_DAYS_PER_YEAR
-REBALANCE_FREQUENCY = 'ME'  # Frecuencia de rebalanceo: 'ME' (Month End)
+LOOKBACK_YEARS = 3  = LOOKBACK_YEARS * TRADING_DAYS_PER_YEAR
+REBALANCE_FREQUENCY = 'ME'  
 
-# Parámetros del modelo HRP (Hierarchical Risk Parity) - según el "modelo"
 HRP_MODEL_PARAMS = {
     'model': 'HRP',
     'codependence': 'pearson',
-    'rm': 'MV', # Risk measure: Variance
-    'rf': 0,    # Risk-free rate
+    'rm': 'MV', 
+    'rf': 0,    
     'linkage': 'average',
-    'max_k': 10, # Max number of clusters (may be specific to HERC but included in example)
+    'max_k': 10,
     'leaf_order': True
 }
-
-# ==============================================================================
-# 2. DESCARGA Y PREPARACIÓN DE DATOS
-# ==============================================================================
 
 print(f"Descargando datos para {len(ASSETS)} tickers...")
 asset_data_downloaded = yf.download(ASSETS,
@@ -67,9 +43,9 @@ asset_data_downloaded = yf.download(ASSETS,
 
 asset_prices = asset_data_downloaded.loc[:, ('Adj Close', slice(None))]
 asset_prices.columns = ASSETS
-asset_prices.dropna(axis=1, how='all', inplace=True) # Eliminar activos sin datos
+asset_prices.dropna(axis=1, how='all', inplace=True)
 current_assets = asset_prices.columns.tolist()
-ASSETS = current_assets # Actualizar la lista de activos
+ASSETS = current_assets 
 print(f"Datos descargados para {len(ASSETS)} activos.")
 
 asset_returns = asset_prices.pct_change().dropna() #
@@ -80,9 +56,7 @@ if len(asset_returns) < LOOKBACK_DAYS:
 
 print(f"Cálculo de retornos diarios completado. {len(asset_returns)} observaciones.")
 
-# ==============================================================================
-# 3. FUNCIONES PARA EL MODELO Y BACKTESTING
-# ==============================================================================
+#  FUNCIONES PARA EL MODELO Y BACKTESTING
 
 def calculate_hrp_weights_riskfolio(historical_returns: pd.DataFrame,
                                     model_params: dict) -> np.ndarray:
@@ -104,7 +78,7 @@ def calculate_hrp_weights_riskfolio(historical_returns: pd.DataFrame,
     )
 
     if weights_df is None or weights_df.empty:
-        # print("Advertencia: Optimización HRP no devolvió pesos. Usando pesos iguales.")
+     
         return np.ones(num_assets) / num_assets
     
     return weights_df['weights'].values.flatten()
@@ -138,21 +112,20 @@ def run_backtest_rolling_window(
             loc_current_date = all_returns.index.get_loc(current_date)
             historical_returns_window = all_returns.iloc[loc_current_date - lookback_period_days : loc_current_date]
             
-            if historical_returns_window.shape[0] < lookback_period_days // 2 : # Fallback si la ventana es muy pequeña
-                 if current_weights is None: # Para el primer cálculo si no hay suficientes datos
+            if historical_returns_window.shape[0] < lookback_period_days // 2 :
+                 if current_weights is None: 
                     num_assets_fallback = all_returns.shape[1]
                     current_weights = np.array([1/num_assets_fallback] * num_assets_fallback)
-                 # Si no, mantenemos los pesos anteriores.
+
             else:
-                # if current_weights is None: print(f"Cálculo inicial de pesos para {current_date.strftime('%Y-%m-%d')}.")
-                # else: print(f"Rebalanceando para {current_date.strftime('%Y-%m-%d')}.")
+
                 current_weights = weight_calculation_func(historical_returns_window, model_parameters)
         
         if current_weights is not None:
             period_return = np.sum(current_weights * all_returns.loc[current_date])
             portfolio_returns_series.loc[current_date] = period_return
             all_weights_df.loc[current_date] = current_weights
-        else: # Muy improbable que se alcance con la lógica actual
+        else: 
             portfolio_returns_series.loc[current_date] = np.nan
             
     final_portfolio_returns = portfolio_returns_series.dropna()
@@ -161,9 +134,7 @@ def run_backtest_rolling_window(
     print("Backtest finalizado.")
     return final_portfolio_returns, final_weights_df
 
-# ==============================================================================
-# 4. FUNCIONES DE MÉTRICAS Y GRÁFICOS (Sin cambios mayores respecto a 1a4 HRP copy.py)
-# ==============================================================================
+# FUNCIONES DE MÉTRICAS Y GRÁFICOS
 
 def calculate_performance_metrics(returns_series: pd.Series,
                                   trading_days_year: int = TRADING_DAYS_PER_YEAR) -> pd.Series:
@@ -211,10 +182,7 @@ def plot_cumulative_returns(returns_dict: dict, title: str = 'Retornos Acumulado
 
 def plot_asset_weights_evolution(weights_df: pd.DataFrame, strategy_name: str):
     if not weights_df.empty:
-        # Para un número grande de activos, el gráfico de área puede ser denso.
-        # Se podría considerar graficar solo los N activos con mayor peso promedio,
-        # o agrupar los pesos menores en "Otros". Por ahora, se mantiene como estaba.
-        if weights_df.shape[1] > 20: # Si hay muchos activos, ajustar leyenda
+        if weights_df.shape[1] > 20: 
             plt.figure(figsize=(14, 8))
             plt.stackplot(weights_df.index, weights_df.T, labels=weights_df.columns)
             plt.title(f'Evolución de Pesos de Activos: {strategy_name}')
@@ -234,9 +202,7 @@ def plot_asset_weights_evolution(weights_df: pd.DataFrame, strategy_name: str):
     else:
         print(f"No hay datos de pesos para graficar para la estrategia {strategy_name}.")
 
-# ==============================================================================
-# 5. EJECUCIÓN DEL BACKTEST Y ANÁLISIS DE RESULTADOS
-# ==============================================================================
+#  EJECUCIÓN DEL BACKTEST Y ANÁLISIS DE RESULTADOS
 
 hrp_portfolio_returns, hrp_asset_weights = run_backtest_rolling_window(
     all_returns=asset_returns,
@@ -252,7 +218,7 @@ if not hrp_portfolio_returns.empty:
     print("\nMétricas de Rendimiento del Portafolio HRP:")
     print(hrp_performance_metrics)
 
-    # --- Comparación con un Portafolio de Igual Peso (Equal Weight) ---
+   
     aligned_asset_returns_for_ew = asset_returns.loc[hrp_portfolio_returns.index]
     
     if not aligned_asset_returns_for_ew.empty:
