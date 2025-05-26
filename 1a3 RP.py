@@ -36,22 +36,18 @@ def calculate_risk_parity_weights_rp(historical_returns):
         return np.ones(n) / n
 
     port = rp.Portfolio(returns=historical_returns)
-    # Configuración para Risk Parity (basado en volatilidad)
-    # rm='MV' utiliza la matriz de covarianza muestral.
-    # Para 'gaussian' necesitarías más parámetros o una configuración específica.
-    # 'vol' es la medida de riesgo estándar (volatilidad).
-    port.assets_stats(method_mu='hist', method_cov='hist') # Usar retornos históricos para mu y cov
+    port.assets_stats(method_mu='hist', method_cov='hist') 
 
     weights_df = port.rp_optimization( 
-        model='Classic', # Modelo clásico de paridad de riesgo (ERC)
-        rm='MV',         # Medida de riesgo: Varianza (Mean-Variance)
-        rf=0,            # Tasa libre de riesgo
-        b=None           # Sin vector de contribución de riesgo específico (se busca igualdad)
+        model='Classic', 
+        rm='MV',         
+        rf=0,            
+        b=None           
     )
 
     if weights_df is None or weights_df.empty:
         n_assets = len(historical_returns.columns)
-        return np.array([1/n_assets] * n_assets) # Fallback a pesos iguales
+        return np.array([1/n_assets] * n_assets) 
 
     return weights_df['weights'].values.flatten()
 
@@ -59,47 +55,36 @@ def backtest_risk_parity_rolling_window_rp(returns, lookback=756, rebalance_freq
     portfolio_returns_series = pd.Series(index=returns.index[lookback:], dtype=float)
     all_weights = pd.DataFrame(index=returns.index[lookback:], columns=returns.columns, dtype=float)
 
-    # Se encarga de que no haya rebalanceo hasta que haya pasado el período suficiente para calcular los datos por primera vez (3 años)
+    
     rebalance_dates = returns.resample(rebalance_freq).first().index
     rebalance_dates = rebalance_dates[rebalance_dates >= returns.index[lookback]]
 
-    # Necesario para la primera vez que se asignan pesos
+    
     current_weights = None
 
     for i in range(lookback, len(returns.index)):
         current_date = returns.index[i]
         
-        # Rebalanceo si es la fecha de rebalanceo y no es el primer cálculo de pesos
+      
         if current_weights is None or current_date in rebalance_dates:
-            # Seleccionar datos históricos para el cálculo de pesos (solo pasado)
-            # `iloc` se usa para asegurar que tomamos `lookback` número de filas
-            # `[:i]` asegura que solo usamos datos hasta el día *anterior* al `current_date` para evitar lookahead bias.
             historical_data_end_loc = returns.index.get_loc(current_date)
             historical_returns = returns.iloc[historical_data_end_loc - lookback : historical_data_end_loc]
             
-            if historical_returns.shape[0] < lookback: # Asegurarse que tenemos suficientes datos
-                # Si al inicio del backtest no hay suficientes datos con `[:i]`,
-                # podríamos decidir esperar o usar los datos disponibles.
-                # Por simplicidad, si esto ocurre al principio, lo saltamos o usamos pesos iguales.
-                # Sin embargo, el bucle for ya empieza en `lookback`, así que esto
-                # se maneja por la selección de `historical_returns`
-                if current_weights is None: # Para el primer cálculo si no hay suficientes datos
+            if historical_returns.shape[0] < lookback: 
+                if current_weights is None: 
                     n_assets = len(returns.columns)
                     current_weights = np.array([1/n_assets] * n_assets)
-                # Si no, mantenemos los pesos anteriores hasta tener suficientes datos.
+    
             else:
                 current_weights = calculate_risk_parity_weights_rp(historical_returns)
         
-        # Calcular el retorno del portafolio para el día actual con los pesos calculados
+  
         period_return = np.sum(current_weights * returns.loc[current_date])
         portfolio_returns_series[current_date] = period_return
         all_weights.loc[current_date] = current_weights
         
     return portfolio_returns_series.dropna(), all_weights.dropna()
 
-# Ejecutar el backtest
-# lookback: número de días para calcular la covarianza y los pesos (aprox. 1 año)
-# rebalance_freq: 'M' para mensual, 'Q' para trimestral, 'A' para anual
 lookback_period = 756
 rebalance_frequency = 'ME' # Rebalanceo mensual
 
@@ -118,7 +103,7 @@ def calculate_performance_metrics(returns_series):
     """
     Calcula métricas de rendimiento para una serie de retornos.
     """
-    annual_return = returns_series.mean() * 252  # Asumiendo 252 días de trading al año
+    annual_return = returns_series.mean() * 252  
     volatility = returns_series.std() * np.sqrt(252)
     sharpe_ratio = annual_return / volatility if volatility != 0 else 0
     
@@ -134,15 +119,13 @@ def calculate_performance_metrics(returns_series):
         'Max Drawdown': max_drawdown
     })
 
-# Calcular métricas para el portafolio Risk Parity
+
 rp_metrics = calculate_performance_metrics(rp_portfolio_returns)
 print("\nMétricas de Rendimiento del Portafolio Risk Parity:")
 print(rp_metrics)
 
-# Crear un portafolio de igual peso (Equal Weight) para comparación
 n_assets = returns.shape[1]
 equal_weights = np.array([1/n_assets] * n_assets)
-# Alineamos índices temporales usando .loc en lugar de []
 ew_portfolio_returns = returns.loc[rp_portfolio_returns.index].dot(equal_weights)
 
 ew_metrics = calculate_performance_metrics(ew_portfolio_returns)
@@ -150,7 +133,6 @@ print("\nMétricas de Rendimiento del Portafolio Equal Weight:")
 print(ew_metrics)
 
 
-# # Graficar los retornos acumulados
 # def plot_strategy_comparison(returns_dict):
 #     cumulative_returns_df = pd.DataFrame()
 #     for strategy, returns_series in returns_dict.items():
@@ -166,7 +148,6 @@ print(ew_metrics)
 #     plt.show()
 
 
-# # Comparar Risk Parity con Equal Weight
 # strategies_to_plot = {
 #     'Risk Parity (riskfolio-lib)': rp_portfolio_returns,
 #     'Equal Weight': ew_portfolio_returns
