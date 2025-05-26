@@ -1,6 +1,3 @@
-# ---------------------------
-# 📦 BLACK-LITTERMAN COMPLETO Y ROBUSTO — DELTA JUSTIFICADO
-# ---------------------------
 
 import pandas as pd
 import numpy as np
@@ -9,20 +6,12 @@ from pypfopt import risk_models, expected_returns
 from pypfopt.black_litterman import BlackLittermanModel
 from pypfopt.efficient_frontier import EfficientFrontier
 
-# ---------------------------
-# 1. Cargar precios de activos
-# ---------------------------
 try:
     prices = pd.read_csv("precios.csv", index_col=0, parse_dates=True)
     prices = prices.sort_index()
-    print("✅ precios.csv cargado correctamente.")
-except Exception as e:
-    print("❌ Error al cargar precios.csv:", e)
-    raise
-
-# ---------------------------
-# 2. Descargar precios del índice SPY
-# ---------------------------
+    except Exception as e:
+    
+# Descargar precios del índice SPY
 try:
     spy_data = yf.download("SPY", start="2003-01-01", end="2021-12-31", auto_adjust=False)
     market_prices = spy_data["Adj Close"]
@@ -31,9 +20,7 @@ except Exception as e:
     print("❌ Error al descargar SPY:", e)
     raise
 
-# ---------------------------
-# 3. Calcular delta basado en rentabilidad esperada y varianza del mercado
-# ---------------------------
+#  Calcular delta basado en rentabilidad esperada y varianza del mercado
 expected_market_return = 0.10  # Supuesto: 10 % anual
 returns_spy = market_prices.pct_change().dropna()
 volatility = returns_spy.std() * np.sqrt(252)
@@ -41,9 +28,7 @@ variance = volatility**2
 delta = (expected_market_return / variance).item()
 print(f"✅ Delta calculado con rentabilidad esperada del 10 %: {round(delta, 4)}")
 
-# ---------------------------
-# 4. Configuración de rebalanceo
-# ---------------------------
+# Configuración de rebalanceo
 window_months = 36
 rebalance_dates = prices.resample("ME").last().index[window_months:]
 
@@ -53,9 +38,7 @@ view_periods = {
     (2016, 2021): ["PFE", "JNJ", "MRK", "UNH", "ABT", "WYE", "LLY"],
 }
 
-# ---------------------------
-# 5. Bucle de rebalanceo mensual
-# ---------------------------
+#  Bucle de rebalanceo mensual
 rebalance_results = []
 
 for date in rebalance_dates:
@@ -109,16 +92,12 @@ for date in rebalance_dates:
         "weights": cleaned_weights
     })
 
-# ---------------------------
-# 6. Exportar resultados
-# ---------------------------
+#  Exportar resultados
 df_resultados = pd.DataFrame(rebalance_results)
 df_resultados.to_pickle("pesos_blacklitterman.pkl")
 print("✅ Resultados guardados en 'pesos_blacklitterman.pkl'")
 
-# ---------------------------
-# 7. Evaluar la estrategia Black-Litterman
-# ---------------------------
+#  Evaluar la estrategia Black-Litterman
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
@@ -139,12 +118,12 @@ pesos_df = pesos_df.loc[:, pesos_df.columns.intersection(returns.columns)]
 ret_cartera = (pesos_df * returns[pesos_df.columns]).sum(axis=1)
 valor = (1 + ret_cartera).cumprod()
 
-# --- Estadísticas clave
+#  Estadísticas clave
 cagr = (valor.iloc[-1]) ** (252 / len(valor)) - 1
 vol = ret_cartera.std() * np.sqrt(252)
 sharpe = (cagr - 0.02) / vol  # rf = 2 %
 
-# --- Mostrar resultados
+#  Mostrar resultados
 print("\n=== Cartera Black-Litterman ===")
 print(f"Rentabilidad compuesta anual : {cagr * 100:.2f}%")
 print(f"Volatilidad anual           : {vol * 100:.2f}%")
